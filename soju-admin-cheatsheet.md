@@ -16,7 +16,7 @@ Run this once in a shell. The functions disappear when the shell closes; copy th
 export SOJU_CONFIG=/etc/soju/config
 
 sj() {
-  sudo sojuctl -config "$SOJU_CONFIG" "$@"
+  sudo -n sojuctl -config "$SOJU_CONFIG" "$@"
 }
 
 sj-user() {
@@ -42,21 +42,55 @@ sj-cert() {
 }
 
 sj-logs() {
-  sudo journalctl -u soju -n "${1:-100}" --no-pager
+  sudo -n journalctl -u soju -n "${1:-100}" --no-pager
 }
 
 sj-follow-logs() {
-  sudo journalctl -u soju -f
+  sudo -n journalctl -u soju -f
 }
 ~~~
 
-Start each administrative session with:
+No separate sudo password-validation step is required when your sudo policy allows passwordless Soju administration. Test the helper with:
 
 ~~~bash
-sudo -v
+sj help
 ~~~
 
-Soju's admin socket normally requires root or suitable permissions. Keep sudo password protection unless you have a deliberate, narrowly scoped sudoers policy.
+The `-n` option prevents password prompts and fails immediately if the command is not covered by your sudo policy. If your system requires a password, remove `-n` from the helper or run the command as a sudo-capable administrator. Soju's admin socket normally requires root or suitable permissions. Keep sudo password protection unless you have a deliberate, narrowly scoped sudoers policy.
+
+## Optional: passwordless sudo for Soju administration
+
+The setup used in this runbook grants the Linux account passwordless access to `sojuctl` only. The sudoers filename is arbitrary, but this setup uses `/etc/sudoers.d/sojuctl`. Do not grant `NOPASSWD: ALL`.
+
+This must be installed by `root` or by an administrator who already has permission to edit sudoers. Replace `<LINUX_USER>` with the Linux login that will administer Soju:
+
+~~~bash
+# Run this as root. If you already have suitable sudo access, prefix it with sudo.
+visudo -f /etc/sudoers.d/sojuctl
+~~~
+
+Put this exact rule in the editor:
+
+~~~sudoers
+# /etc/sudoers.d/sojuctl
+<LINUX_USER> ALL=(root) NOPASSWD: /usr/bin/sojuctl -config /etc/soju/config *
+~~~
+
+Save and validate it as root:
+
+~~~bash
+chmod 0440 /etc/sudoers.d/sojuctl
+visudo -cf /etc/sudoers.d/sojuctl
+~~~
+
+Then test from the target account. This must not prompt for a password:
+
+~~~bash
+sudo -n /usr/bin/sojuctl -config /etc/soju/config help
+sudo -n /usr/bin/sojuctl -config /etc/soju/config user status
+~~~
+
+This rule covers the `sj`, `sj-user`, `sj-networks`, `sj-channels`, `sj-sasl`, and `sj-cert` helpers. It does not cover `systemctl`, `journalctl`, `sed`, or other root commands. The `sj-logs` helpers therefore fail cleanly with `sudo -n` unless you separately add a narrow journalctl rule. If you cannot become root or do not have an existing sudo-capable administrator, you cannot create this exception from the target account alone.
 
 ## Service and configuration
 
@@ -245,16 +279,23 @@ sj-user <SOJU_USER> network update <NETWORK> -certfp <UPSTREAM_SERVER_SHA512_FIN
 
 ## Channel commands
 
-Joining a channel normally from Relay is easiest; Soju saves joined channels automatically.
+You can join channels normally from Relay. Connect to the desired Soju network and use Relay's usual `/join #channel` command. Soju saves the joined channel and automatically joins it again on the next connection. You do not need to use `sojuctl` or BouncerServ for ordinary channel use.
 
 ~~~bash
 # List saved channels
 sj-channels <SOJU_USER> <NETWORK>
+~~~
 
-# Join and save a channel from the selected network
+The following commands are optional administrative alternatives. Use them when no Relay client is attached, when you need to manage a detached channel, or when administering another Soju user:
+
+~~~bash
+# Raw IRC fallback; normally use Relay's /join instead
 sj-user <SOJU_USER> network quote <NETWORK> 'JOIN #<CHANNEL>'
+~~~
 
-# From a client already attached to the network, use BouncerServ:
+From a client already attached to the network, you can also use BouncerServ for channel administration, including `channel create`:
+
+~~~irc
 /msg BouncerServ channel create '#<CHANNEL>'
 /msg BouncerServ channel update '#<CHANNEL>' -detached true
 /msg BouncerServ channel update '#<CHANNEL>' -detached false
@@ -316,3 +357,4 @@ If an upstream network reports TAGMSG Unknown command, the network may advertise
 
 - [soju manual](https://soju.im/doc/soju.1.html)
 - [sojuctl manual](https://soju.im/doc/sojuctl.1.html)
+
