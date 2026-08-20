@@ -20,13 +20,26 @@ sj() {
 }
 
 sj-user() {
+  if [ "$#" -eq 0 ]; then
+    sj user status
+    return
+  fi
+
   local user="$1"
   shift
-  sj user run "$user" "$@"
+  if [ "$#" -eq 0 ]; then
+    sj user run "$user" network status
+  else
+    sj user run "$user" "$@"
+  fi
 }
 
 sj-networks() {
-  sj-user "$1" network status
+  if [ -z "${1:-}" ]; then
+    printf 'usage: sj-networks <SOJU_USER>\n' >&2
+    return 2
+  fi
+  sj-user "$1"
 }
 
 sj-channels() {
@@ -54,6 +67,14 @@ No separate sudo password-validation step is required when your sudo policy allo
 
 ~~~bash
 sj help
+~~~
+
+The `sj-user` helper has convenient defaults:
+
+~~~bash
+sj-user                                      # List all Soju users
+sj-user <SOJU_USER>                          # List that user's networks
+sj-user <SOJU_USER> sasl status -network <NETWORK>
 ~~~
 
 The `-n` option prevents password prompts and fails immediately if the command is not covered by your sudo policy. If your system requires a password, remove `-n` from the helper or run the command as a sudo-capable administrator. Soju's admin socket normally requires root or suitable permissions. Keep sudo password protection unless you have a deliberate, narrowly scoped sudoers policy.
