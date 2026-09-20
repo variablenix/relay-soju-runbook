@@ -27,6 +27,10 @@ Read these in order:
 ~~~text
 Relay browser/app
         |
+        | HTTPS / WebSocket (optional web proxy or tunnel)
+        v
+Relay backend
+        |
         | TLS + SASL PLAIN
         v
 Soju IRC bouncer
@@ -35,6 +39,10 @@ Soju IRC bouncer
         v
 IRC networks
 ~~~
+
+Soju handles native IRC over TLS itself: no reverse proxy is required between Relay's backend and Soju. The connection hostname must resolve to the server, the TLS certificate must match it, and the listener port must be reachable. Soju's `hostname` setting does not create DNS records or open ports. An existing wildcard or private DNS record can provide resolution.
+
+An HTTP proxy or Cloudflare Tunnel serving Relay's web interface is a separate connection, not the IRC connection to Soju.
 
 The important separation is:
 
@@ -61,3 +69,5 @@ Keep Soju's administrative socket private, restrict TCP/6697 to trusted clients,
 ## Status
 
 This is an operational runbook, not a turnkey installer. Review provider-specific DNS plugin options, IRC network authentication requirements, and local firewall/DNS behavior before applying commands.
+
+Examples target a Debian/Ubuntu systemd installation with Soju's native IRC/TLS listener. Package availability and commands vary by release; check the installed `man soju`, `man sojuctl`, and `sojuctl help`. No custom Soju fork or Soju-TUI installation is required. Soju-TUI is an optional administration interface, not the bouncer.

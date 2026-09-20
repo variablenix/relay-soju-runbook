@@ -10,13 +10,13 @@ The examples use placeholders such as <SOJU_USER>, <NETWORK>, and <IRC_ACCOUNT>.
 
 ## Quick variables and helper functions
 
-Run this once in a shell. The functions disappear when the shell closes; copy them into ~/.bashrc or ~/.zshrc if desired.
+Run this once in Bash or Zsh. The functions disappear when the shell closes; copy them into ~/.bashrc or ~/.zshrc if desired.
 
 ~~~bash
 export SOJU_CONFIG=/etc/soju/config
 
 sj() {
-  sudo -n sojuctl -config "$SOJU_CONFIG" "$@"
+  sudo sojuctl -config "$SOJU_CONFIG" "$@"
 }
 
 sj-user() {
@@ -55,15 +55,15 @@ sj-cert() {
 }
 
 sj-logs() {
-  sudo -n journalctl -u soju -n "${1:-100}" --no-pager
+  sudo journalctl -u soju -n "${1:-100}" --no-pager
 }
 
 sj-follow-logs() {
-  sudo -n journalctl -u soju -f
+  sudo journalctl -u soju -f
 }
 ~~~
 
-No separate sudo password-validation step is required when your sudo policy allows passwordless Soju administration. Test the helper with:
+These helpers use your existing sudo policy and prompt when required. Test with:
 
 ~~~bash
 sj help
@@ -77,41 +77,11 @@ sj-user <SOJU_USER>                          # List that user's networks
 sj-user <SOJU_USER> sasl status -network <NETWORK>
 ~~~
 
-The `-n` option prevents password prompts and fails immediately if the command is not covered by your sudo policy. If your system requires a password, remove `-n` from the helper or run the command as a sudo-capable administrator. Soju's admin socket normally requires root or suitable permissions. Keep sudo password protection unless you have a deliberate, narrowly scoped sudoers policy.
+## Admin access
 
-## Optional: passwordless sudo for Soju administration
+Soju's admin socket grants full bouncer administration, including other users' networks. Use a trusted administrator account. Do not make the socket world-writable or copy a broad passwordless sudo rule just to avoid a prompt. If you deliberately delegate access, have the system administrator review the socket permissions or sudo policy; that is separate from connecting Relay as a regular Soju user.
 
-The setup used in this runbook grants the Linux account passwordless access to `sojuctl` only. The sudoers filename is arbitrary, but this setup uses `/etc/sudoers.d/sojuctl`. Do not grant `NOPASSWD: ALL`.
-
-This must be installed by `root` or by an administrator who already has permission to edit sudoers. Replace `<LINUX_USER>` with the Linux login that will administer Soju:
-
-~~~bash
-# Run this as root. If you already have suitable sudo access, prefix it with sudo.
-visudo -f /etc/sudoers.d/sojuctl
-~~~
-
-Put this exact rule in the editor:
-
-~~~sudoers
-# /etc/sudoers.d/sojuctl
-<LINUX_USER> ALL=(root) NOPASSWD: /usr/bin/sojuctl -config /etc/soju/config *
-~~~
-
-Save and validate it as root:
-
-~~~bash
-chmod 0440 /etc/sudoers.d/sojuctl
-visudo -cf /etc/sudoers.d/sojuctl
-~~~
-
-Then test from the target account. This must not prompt for a password:
-
-~~~bash
-sudo -n /usr/bin/sojuctl -config /etc/soju/config help
-sudo -n /usr/bin/sojuctl -config /etc/soju/config user status
-~~~
-
-This rule covers the `sj`, `sj-user`, `sj-networks`, `sj-channels`, `sj-sasl`, and `sj-cert` helpers. It does not cover `systemctl`, `journalctl`, `sed`, or other root commands. The `sj-logs` helpers therefore fail cleanly with `sudo -n` unless you separately add a narrow journalctl rule. If you cannot become root or do not have an existing sudo-capable administrator, you cannot create this exception from the target account alone.
+If Soju is running but the TUI or `sojuctl` reports permission denied, check access to both `/run/soju` and `/run/soju/admin`. Socket permissions may be recreated on restart. A missing socket instead calls for checking the service and `listen unix+admin://` configuration.
 
 ## Service and configuration
 
@@ -221,6 +191,9 @@ sj-user <SOJU_USER> network create \
   -enabled false
 
 # Update a network; this disconnects and reconnects the upstream network
+# Force a reconnect without changing saved settings (enabled networks only)
+sj-user <SOJU_USER> network update <NETWORK>
+
 sj-user <SOJU_USER> network update <NETWORK> -enabled true
 sj-user <SOJU_USER> network update <NETWORK> -enabled false
 sj-user <SOJU_USER> network update <NETWORK> -nick <IRC_NICK>
@@ -268,7 +241,7 @@ sj-sasl <SOJU_USER> <NETWORK>
 
 The IRC account and password are upstream network credentials. They are different from the Soju bouncer username/password used by Relay.
 
-Changing SASL settings requires an upstream reconnect to apply. Verify with sasl status.
+Changing SASL settings requires an upstream reconnect to apply: `sj-user <SOJU_USER> network update <NETWORK>`. Then verify with `sasl status`. Reconnecting only Relay does not reconnect the upstream network.
 
 ### Upstream CertFP / SASL EXTERNAL
 
@@ -284,19 +257,31 @@ certfp generate is the Soju command for SASL EXTERNAL. Do not use sasl set-exter
 
 The certificate is scoped to the Soju user/network. If two separate Soju users connect to the same upstream NickServ account, each user's certificate must be registered separately, or both users must use upstream SASL PLAIN.
 
-Disable stored upstream SASL credentials when they are no longer needed:
+Reconnect upstream after generation so the server sees the certificate. Register the client fingerprint using that network's NickServ instructions, then reconnect upstream again to test automatic login. Generating another certificate replaces the identity you need to register.
+
+Only when intentionally disabling SASL entirely, remove its stored credentials:
 
 ~~~bash
 sj-user <SOJU_USER> sasl reset -network <NETWORK>
 ~~~
 
+Do not run `sasl reset` as a cleanup step after configuring EXTERNAL: it disables that method too. Switching methods may remove the old stored credentials/certificate; plan to register a replacement certificate if you later regenerate one.
+
 The certfp fingerprint output is the client certificate fingerprint. Do not confuse it with the -certfp network option, which pins an upstream server certificate and uses a different purpose/format.
 
-To pin an upstream server certificate when a network uses a self-signed certificate, use the server's SHA-512 fingerprint:
+To pin an upstream server certificate when a network uses a self-signed certificate, obtain its SHA-512 fingerprint from the administrator over a trusted channel. Do not blindly trust a fingerprint from an error or an unverified connection. Pinning replaces normal CA validation:
 
 ~~~bash
 sj-user <SOJU_USER> network update <NETWORK> -certfp <UPSTREAM_SERVER_SHA512_FINGERPRINT>
 ~~~
+
+If that network now uses a valid public certificate for its configured hostname, remove the old server pin to restore CA validation:
+
+~~~bash
+sj-user <SOJU_USER> network update <NETWORK> -certfp=
+~~~
+
+This does not remove the client certificate used for SASL EXTERNAL. Likewise, `-pass=` clears a stale upstream IRC PASS value; do that only when the server no longer requires it.
 
 ## Channel commands
 
@@ -345,7 +330,7 @@ Interpretation:
 ~~~text
 [connected]                         Soju has an upstream connection.
 [disabled]                          The network is intentionally disabled.
-Unauthenticated on upstream network  The TCP/TLS connection works, but services did not identify the account.
+Unauthenticated on upstream network  Soju has not recorded an upstream account; verify with services/logs.
 SASL PLAIN enabled                   Soju is configured with upstream account/password authentication.
 SASL EXTERNAL enabled                Soju is configured to present its client certificate.
 ~~~
@@ -367,10 +352,10 @@ openssl s_client \
   -verify_hostname <SOJU_HOST> \
   -verify_return_error \
   -CAfile /etc/ssl/certs/ca-certificates.crt \
-  </dev/null 2>&1 | grep -E 'Verify return code|subject=|issuer='
+  </dev/null
 ~~~
 
-If a network reports Unauthenticated on upstream network, check sasl status, then either configure sasl set-plain or identify once with NickServ and register the Soju certificate if the network supports CertFP.
+If a network reports Unauthenticated on upstream network (or a TUI says the account was not reported), verify with NickServ/WHOIS and recent logs before changing credentials. Some authentication flows do not report the account to Soju. A configured SASL mechanism or a certificate in NickServ's list alone does not prove automatic login succeeded.
 
 If an upstream network reports TAGMSG Unknown command, the network may advertise CLIENTTAGDENY=*. Use a Relay build that honors that capability; do not expose raw upstream details or passwords in debug logs.
 
@@ -378,4 +363,3 @@ If an upstream network reports TAGMSG Unknown command, the network may advertise
 
 - [soju manual](https://soju.im/doc/soju.1.html)
 - [sojuctl manual](https://soju.im/doc/sojuctl.1.html)
-

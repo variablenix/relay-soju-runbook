@@ -4,10 +4,16 @@ This guide sets up Soju as a separate IRC bouncer and then moves Relay from dire
 
 The workflow keeps the IRC connection at Soju. Relay becomes a client of Soju, so restarting or redeploying the Relay container does not normally make the upstream IRC network see a quit/part.
 
+Jump to: [DNS and routing](#2-choose-the-network-path-and-dns) · [TLS certificates](#4-obtain-and-maintain-the-lets-encrypt-certificate) · [Soju configuration](#5-configure-soju-and-the-admin-socket) · [Relay settings](#10-one-relay-cutover-per-network) · [CertFP](#11-register-the-soju-certificate-through-relay) · [Troubleshooting](#troubleshooting).
+
 ## The final connection layout
 
 ~~~text
 Relay browser/app
+        |
+        | HTTPS / WebSocket (optional web proxy or tunnel)
+        v
+Relay backend
         |
         | TLS + SASL PLAIN using the Soju account
         v
@@ -15,7 +21,7 @@ Soju on <SOJU_HOST>:6697
         |
         | TLS to each upstream IRC network
         v
-Libera / OUCH / Snoonet / other IRC networks
+Upstream IRC networks
 ~~~
 
 Relay-to-Soju authentication and Soju-to-IRC authentication are separate:
@@ -35,26 +41,30 @@ Use this order for each Relay account:
 1. Back up Relay's persistent data.
 2. Install and validate Soju separately.
 3. Create one Soju user for each Relay account.
-4. Add and authenticate the upstream networks in Soju.
+4. Add disabled upstream networks and configure their authentication in Soju.
 5. Edit each existing Relay network in place.
 6. Change the Relay server to <SOJU_HOST>, set the bouncer SASL account/password, and save once.
-7. Once connected through Soju, run the one-time NickServ command to register the Soju certificate when using CertFP.
+7. Enable each staged Soju network. Once connected through Soju, register its client certificate with NickServ when using CertFP.
 8. Verify Soju and NickServ status.
 9. Join or confirm channels and remove any one-time setup command from Relay.
 
 Do not delete the existing Relay networks before the Soju path works. Editing them in place preserves Relay's saved channel/UI data. Keep the old direct network details available until the cutover is verified.
 
-The intended workflow has one Relay UI reconnect per network: prepare Soju first, then change Relay once. Generating a certificate or changing Soju's upstream authentication can cause an upstream reconnect; that is separate from the Relay UI cutover.
+The intended workflow has one Relay UI cutover per network: prepare Soju first, then change Relay once. New certificates and SASL settings require a fresh upstream connection; that is separate from the Relay UI cutover.
 
 ## Placeholders used in this guide
 
 Replace these values with your own values:
+
+Values in angle brackets are templates, not shell syntax: replace them before running a command. Password arguments can appear in shell history and process listings. Use a trusted administrative session, avoid recording commands containing secrets, and never paste their expanded contents into an issue or chat.
 
 ~~~text
 <SOJU_HOST>             DNS name reachable by Relay, for example soju.example.net
 <SOJU_BIND_ADDRESS>     Private/VPN/Docker-reachable address for the listener
 <SOJU_USER>             Soju username for one Relay account
 <SOJU_PASSWORD>         Password for that Soju user
+<NETWORK>               Stable Soju network name, for example example-irc
+<IRC_SERVER>            Network's documented TLS server, for example irc.example.org
 <IRC_NICK>              Nickname used on an upstream network
 <IRC_IDENT>             IRC username/ident field
 <IRC_REAL_NAME>         IRC real name field
@@ -87,6 +97,10 @@ Do not publish an internal/private IP in public DNS. Standard HTTP-oriented Clou
 
 The DNS name used by Relay must match the certificate's hostname. The Soju port is commonly 6697.
 
+**No reverse proxy is needed for this IRC connection.** Configure `hostname`, a TLS listener, and its certificate in Soju, and allow the listener port from the intended clients. `hostname` does not set up DNS or firewall rules. A dedicated record, an existing wildcard, or private DNS can resolve the name; test from the Relay backend/container, not just your browser's machine. Only publish an AAAA record when the IPv6 route and listener work too.
+
+An HTTP reverse proxy or Cloudflare Tunnel for Relay's web interface can remain in place. It serves the browser-to-Relay hop, not the Relay-to-Soju hop.
+
 ## 3. Install Soju
 
 On Debian/Ubuntu:
@@ -112,7 +126,7 @@ Before requesting the certificate:
 - Your DNS zone is hosted by a provider with an API or ACME DNS-01 integration.
 - Relay can resolve and reach <SOJU_HOST> on TCP/6697 using your private/VPN/Docker route.
 - The public authoritative DNS servers can answer TXT queries for _acme-challenge.<SOJU_HOST>.
-- You have an email address for Let's Encrypt expiry notices.
+- You have an ACME account contact email and separate certificate-expiry monitoring. Let's Encrypt no longer sends expiry notification emails.
 
 The certificate validation TXT record is separate from the A/AAAA record used by Relay. A private or split-horizon A/AAAA record can work as long as the public DNS provider can publish the DNS-01 TXT record.
 
@@ -222,16 +236,16 @@ sudo openssl x509 \
 
 ### 4.4 Copy the certificate into Soju's protected TLS directory
 
-Using a separate Soju-owned copy avoids depending on the permissions and symlink layout under /etc/letsencrypt/live. Create the destination and copy the current certificate:
+Using a separate root-owned, Soju-readable copy avoids depending on the permissions and symlink layout under /etc/letsencrypt/live. Create the destination and copy the current certificate:
 
 ~~~bash
-sudo install -d -o soju -g soju -m 0750 /etc/soju/tls
+sudo install -d -o root -g soju -m 0750 /etc/soju/tls
 
-sudo install -o soju -g soju -m 0644 \
+sudo install -o root -g soju -m 0644 \
   /etc/letsencrypt/live/<SOJU_HOST>/fullchain.pem \
   /etc/soju/tls/fullchain.pem
 
-sudo install -o soju -g soju -m 0640 \
+sudo install -o root -g soju -m 0640 \
   /etc/letsencrypt/live/<SOJU_HOST>/privkey.pem \
   /etc/soju/tls/privkey.pem
 ~~~
@@ -252,7 +266,7 @@ Certbot renews certificates, but Soju must receive the renewed files. Create thi
 sudoedit /etc/letsencrypt/renewal-hooks/deploy/soju-copy-cert
 ~~~
 
-Replace <SOJU_HOST> in the script with the real certificate name:
+Replace <SOJU_HOST> in the script with the certificate name shown by `sudo certbot certificates`; its lineage directory may have a suffix such as `-0001`.
 
 ~~~sh
 #!/bin/sh
@@ -262,9 +276,14 @@ DOMAIN="<SOJU_HOST>"
 SOURCE="/etc/letsencrypt/live/$DOMAIN"
 DEST="/etc/soju/tls"
 
-install -d -o soju -g soju -m 0750 "$DEST"
-install -o soju -g soju -m 0644 "$SOURCE/fullchain.pem" "$DEST/fullchain.pem"
-install -o soju -g soju -m 0640 "$SOURCE/privkey.pem" "$DEST/privkey.pem"
+# Ignore renewals for other certificates; allow a direct manual test.
+if [ -n "${RENEWED_LINEAGE:-}" ] && [ "$RENEWED_LINEAGE" != "$SOURCE" ]; then
+  exit 0
+fi
+
+install -d -o root -g soju -m 0750 "$DEST"
+install -o root -g soju -m 0644 "$SOURCE/fullchain.pem" "$DEST/fullchain.pem"
+install -o root -g soju -m 0640 "$SOURCE/privkey.pem" "$DEST/privkey.pem"
 
 # Soju reloads its TLS certificate on HUP without changing its database,
 # message store, or listen sockets.
@@ -316,7 +335,7 @@ openssl s_client \
   -verify_hostname <SOJU_HOST> \
   -verify_return_error \
   -CAfile /etc/ssl/certs/ca-certificates.crt \
-  </dev/null 2>&1 | grep -E 'Verify return code|subject=|issuer='
+  </dev/null
 ~~~
 
 The expected result is Verify return code: 0 (ok). If the certificate expires or the hostname does not match, fix that before moving Relay to Soju.
@@ -352,7 +371,7 @@ Protect the configuration and key:
 ~~~bash
 sudo chown root:soju /etc/soju/config
 sudo chmod 0640 /etc/soju/config
-sudo chown soju:soju /etc/soju/tls/fullchain.pem /etc/soju/tls/privkey.pem
+sudo chown root:soju /etc/soju/tls/fullchain.pem /etc/soju/tls/privkey.pem
 sudo chmod 0640 /etc/soju/tls/privkey.pem
 ~~~
 
@@ -362,7 +381,8 @@ Restrict TCP/6697 to the Relay host, Docker network, VPN subnet, or other intend
 
 ~~~bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now soju
+sudo systemctl enable soju
+sudo systemctl restart soju
 sudo systemctl is-active soju
 sudo systemctl status --no-pager --full soju
 sudo ss -ltnp | grep -E ':6697\b'
@@ -384,7 +404,7 @@ openssl s_client \
   -verify_hostname <SOJU_HOST> \
   -verify_return_error \
   -CAfile /etc/ssl/certs/ca-certificates.crt \
-  </dev/null 2>&1 | grep -E 'Verify return code|subject=|issuer='
+  </dev/null
 ~~~
 
 Expect Verify return code: 0 (ok) from a client with the appropriate CA bundle.
@@ -413,47 +433,19 @@ sudo sojuctl -config /etc/soju/config \
   -admin true
 ~~~
 
-## 8. Add the desktop networks to Soju
+## 8. Add upstream networks to Soju
 
-The following public server names are examples based on common desktop setups. Replace nick, ident, and real-name values. Keep each network name short and stable because it becomes part of Relay's Soju account string.
-
-### OUCH
+Repeat this template for each IRC network, using its documented TLS server and port. Keep each network name short and stable because it becomes part of Relay's Soju account string. Start disabled to avoid competing with your existing direct connection while preparing authentication.
 
 ~~~bash
 sudo sojuctl -config /etc/soju/config \
   user run <SOJU_USER> network create \
-  -name ouch \
-  -addr ircs://irc.ouch.chat:6697 \
-  -nick <OUCH_NICK> \
+  -name <NETWORK> \
+  -addr ircs://<IRC_SERVER>:6697 \
+  -nick <IRC_NICK> \
   -username <IRC_IDENT> \
   -realname '<IRC_REAL_NAME>' \
-  -enabled true
-~~~
-
-### Snoonet
-
-~~~bash
-sudo sojuctl -config /etc/soju/config \
-  user run <SOJU_USER> network create \
-  -name snoonet \
-  -addr ircs://irc.snoonet.org:6697 \
-  -nick <SNOONET_NICK> \
-  -username <IRC_IDENT> \
-  -realname '<IRC_REAL_NAME>' \
-  -enabled true
-~~~
-
-### Libera
-
-~~~bash
-sudo sojuctl -config /etc/soju/config \
-  user run <SOJU_USER> network create \
-  -name libera \
-  -addr ircs://irc.libera.chat:6697 \
-  -nick <LIBERA_NICK> \
-  -username <IRC_IDENT> \
-  -realname '<IRC_REAL_NAME>' \
-  -enabled true
+  -enabled false
 ~~~
 
 Check the networks:
@@ -479,7 +471,7 @@ sudo sojuctl -config /etc/soju/config \
   '<IRC_ACCOUNT_PASSWORD>'
 ~~~
 
-Then verify:
+Check the saved method (the staged network will still be disconnected until Step 10):
 
 ~~~bash
 sudo sojuctl -config /etc/soju/config \
@@ -518,8 +510,8 @@ Use these values:
 | Server | <SOJU_HOST> |
 | Port | 6697 |
 | Use secure connection (TLS) | Checked |
-| Only allow trusted certificates | Checked when the Soju certificate is publicly/trustedly valid |
-| Top-level Password | Blank unless the Soju network explicitly requires a server password |
+| Only allow trusted certificates | Checked; fix trust/hostname errors rather than disabling validation |
+| Top-level Password | Blank in this SASL-based setup; this is not the upstream NickServ password |
 | User preferences → Nick | The desired IRC nickname |
 | User preferences → Username | The upstream IRC ident, such as <IRC_IDENT> |
 | User preferences → Real name | <IRC_REAL_NAME> |
@@ -528,7 +520,14 @@ Use these values:
 | Authentication → Password | <SOJU_PASSWORD> |
 | Commands | Empty unless a one-time network-specific command is required |
 
-Save the network once. Relay should reconnect to Soju, and Soju should keep the upstream network connection.
+Save the network once. Relay should reconnect to Soju, closing its old direct IRC connection. Enable the staged upstream network:
+
+~~~bash
+sudo sojuctl -config /etc/soju/config \
+  user run <SOJU_USER> network update <NETWORK> -enabled true
+~~~
+
+Soju will now connect using the authentication configured in Step 9. If the old connection has not yet released the nickname, allow it to close or follow the network's documented nickname-recovery procedure.
 
 Important: the Account field is the Soju account/network selector. It is not the upstream NickServ account. For example, a public documentation example would use:
 
@@ -559,13 +558,13 @@ If the network supports adding the currently presented certificate:
 /msg NickServ CERT ADD
 ~~~
 
-If the network requires an explicit fingerprint:
+If the network requires an explicit fingerprint, consult `/msg NickServ HELP CERT` and its official documentation. Some use this form; others require an additional account/nickname argument:
 
 ~~~irc
-/msg NickServ CERT ADD <IRC_NICK> <SOJU_CERT_FINGERPRINT>
+/msg NickServ CERT ADD <SOJU_CERT_FINGERPRINT>
 ~~~
 
-Use the fingerprint format required by that network's services. Many services expect the SHA-1 client-certificate fingerprint. Do not paste an upstream server-certificate fingerprint into this command.
+Use the fingerprint algorithm required by that network (for example SHA-256 or SHA-1), not whichever fingerprint happens to appear first. Do not paste an upstream server-certificate fingerprint into this command.
 
 ### Verify
 
@@ -577,7 +576,29 @@ Use the fingerprint format required by that network's services. Many services ex
 
 The exact output varies by network. Look for the account being identified and, where supported, confirmation that the client certificate is present or matched.
 
-If CERT is unknown or the network says no certificate is being presented, use upstream SASL PLAIN instead. Do not keep retrying a CertFP command that the network's services do not implement.
+If the network requires authentication before allowing a connection, register the explicit Soju client fingerprint through your existing authenticated session before cutover, using that network's documented syntax.
+
+If no certificate is presented, check the selected Soju user/network and reconnect upstream as below. If the network does not support this authentication method, use its documented alternative, such as SASL PLAIN. Do not regenerate a registered certificate unnecessarily.
+
+### Test automatic identification on a fresh upstream connection
+
+Certificate registration and manual identification do not prove that the next login will work. Reconnect only the selected enabled network, then check status before manually identifying again:
+
+~~~bash
+sudo sojuctl -config /etc/soju/config \
+  user run <SOJU_USER> network update <NETWORK>
+
+sudo sojuctl -config /etc/soju/config \
+  user run <SOJU_USER> sasl status -network <NETWORK>
+~~~
+
+Allow time for reconnection. This briefly disconnects that network for all clients of the selected Soju user, but does not delete its saved settings or channels. Reconnecting Relay alone does not renew Soju's upstream TLS/SASL session.
+
+~~~text
+Reconnect browser   -> renew browser-to-Relay connection
+Reconnect Relay IRC -> renew Relay-to-Soju connection
+Update Soju network -> renew Soju-to-IRC TLS/SASL connection
+~~~
 
 ### Remove one-time Relay commands
 
@@ -623,6 +644,8 @@ PLAIN path:   SASL PLAIN enabled; authenticated on upstream network
 Channels:     Expected saved channels are present
 ~~~
 
+Some networks do not report the upstream account to Soju in every authentication flow. If the account is not reported, verify NickServ/WHOIS and logs rather than assuming failure from that line alone.
+
 Then reconnect the Relay client once more only if you need to refresh an already-open UI session. Normal future Relay container restarts should reconnect Relay to Soju without making the upstream network see a quit/part.
 
 ## 14. Repeat for another Relay account
@@ -643,7 +666,7 @@ Add the same network names under that user, but use that account's nickname, ide
 
 If a cutover fails:
 
-1. Leave the Soju network enabled while diagnosing unless it is actively causing harm.
+1. Disable only the affected Soju network before restoring a direct connection if it would compete for the same nickname. Keep its saved configuration.
 2. In Relay, restore the original IRC server hostname and port.
 3. Restore the original Relay authentication mode and credentials.
 4. Save once and reconnect.
@@ -687,7 +710,7 @@ sudo sojuctl -config /etc/soju/config \
 
 ### Soju says Unauthenticated on upstream network
 
-Soju reached the IRC server, but the upstream account is not identified. Check sasl status. For PLAIN, configure sasl set-plain. For CertFP, connect through Relay, identify once with NickServ, register the current Soju certificate, and verify with CERT LIST/STATUS if the network supports those commands.
+This means Soju has not recorded an upstream account; it is not conclusive proof that NickServ authentication failed. Check network connection state, NickServ/WHOIS, and recent logs. An enabled SASL mechanism describes configuration, not a successful login. For CertFP, verify the registered client fingerprint and test a fresh upstream connection as in Step 11.
 
 ### CERT ADD is unknown or says no certificate is present
 
@@ -715,6 +738,18 @@ Relay itself will briefly reconnect to Soju. That is expected. The important dis
 sudo systemctl status --no-pager soju
 sudo journalctl -u soju --since '10 minutes ago' --no-pager
 ~~~
+
+### Unexpected reconnects after deployment
+
+Record the event time before restarting anything. Check which hop disconnected:
+
+| Symptom | Check first |
+| --- | --- |
+| Browser reconnects; Soju connections remain stable | Browser connection, Relay web backend, optional web proxy/tunnel logs |
+| Soju reports downstream connections closing | Relay backend logs and its route to Soju |
+| Soju reports an upstream network disconnect | That network's Soju log entries, TLS and authentication |
+
+Compare timestamps, not just service uptime. A recreated container starts with a new restart counter; `Restarts=0` does not prove uninterrupted service. Text inside an IRC `QUIT` reason is client-supplied and is not evidence of a crash. Redact credentials, account names, addresses, and messages before sharing logs.
 
 ## Ongoing update workflow
 
@@ -745,3 +780,5 @@ For a Soju update or host reboot, expect upstream reconnects. Soju will reconnec
 - [Soju project](https://soju.im/)
 - [Certbot DNS plugins and renewal hooks](https://eff-certbot.readthedocs.io/en/stable/using.html#dns-plugins)
 - [Certbot Cloudflare DNS plugin](https://certbot-dns-cloudflare.readthedocs.io/en/stable/)
+- [Let's Encrypt: ending expiration notification emails](https://letsencrypt.org/2025/01/22/ending-expiration-emails/)
+- [OFTC CertFP instructions (network-specific syntax)](https://www.oftc.net/NickServ/CertFP/)
