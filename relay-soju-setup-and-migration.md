@@ -114,7 +114,7 @@ Use an automated DNS provider plugin whenever possible. The manual DNS method re
 
 Before requesting the certificate:
 
-- <SOJU_HOST> is a fully qualified DNS name.
+- `<SOJU_HOST>` is a complete hostname, such as `soju.example.net`, that resolves to your Soju server from the IRC client (the Relay backend in this setup). An existing wildcard record, private DNS entry, or hosts-file entry can provide resolution; you do not necessarily need a new, separate DNS record. Setting `hostname` in Soju does not create DNS records.
 - Your DNS zone is hosted by a provider with an API or ACME DNS-01 integration.
 - Relay can resolve and reach <SOJU_HOST> on TCP/6697 using your private/VPN/Docker route.
 - The public authoritative DNS servers can answer TXT queries for _acme-challenge.<SOJU_HOST>.
