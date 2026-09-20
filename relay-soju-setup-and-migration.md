@@ -496,6 +496,8 @@ Edit the existing Relay network instead of creating a second copy.
 
 For another IRC client, map these values to its server, TLS, and SASL settings. The account/password here authenticate to Soju, not to upstream NickServ. Clients without equivalent SASL controls may need the alternative login method documented in the [Soju manual](https://soju.im/doc/soju.1.html).
 
+Using a terminal client? Follow the separate [WeeChat + Soju guide](weechat-soju.md) for this client-connection step; the Soju installation and upstream authentication steps remain the same.
+
 Use these values:
 
 | Relay field | Value |

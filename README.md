@@ -28,6 +28,8 @@ Read these in order:
 1. [Relay + Soju setup and migration guide](relay-soju-setup-and-migration.md) — complete installation and migration procedure.
 2. [Soju administration cheat sheet](soju-admin-cheatsheet.md) — day-to-day commands, helper functions, and troubleshooting.
 
+For a terminal client instead of (or alongside) Relay, see [WeeChat + Soju](weechat-soju.md). It covers client setup without repeating the bouncer installation steps.
+
 ## Optional administration interface
 
 Prefer menus to command-line administration? [Soju-TUI](https://github.com/variablenix/soju-tui) is an optional terminal interface for managing Soju users, networks, channels, SASL, and certificates through `sojuctl`. It requires a running Soju instance and authorized access to its admin socket. Follow its README for installation and access setup.
