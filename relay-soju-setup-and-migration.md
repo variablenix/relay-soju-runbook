@@ -8,21 +8,7 @@ Jump to: [DNS and routing](#2-choose-the-network-path-and-dns) · [TLS certifica
 
 ## The final connection layout
 
-~~~text
-Relay browser/app
-        |
-        | HTTPS / WebSocket (optional web proxy or tunnel)
-        v
-Relay backend
-        |
-        | TLS + SASL PLAIN using the Soju account
-        v
-Soju on <SOJU_HOST>:6697
-        |
-        | TLS to each upstream IRC network
-        v
-Upstream IRC networks
-~~~
+![Connection layout: browser to Relay backend over HTTPS/WebSocket; Relay to Soju over IRC/TLS using the Soju account; Soju to IRC networks using separate upstream authentication.](assets/diagrams/connection-layout.svg)
 
 Relay-to-Soju authentication and Soju-to-IRC authentication are separate:
 
@@ -35,6 +21,8 @@ Relay-to-Soju authentication and Soju-to-IRC authentication are separate:
 The password in Relay's top-level Password field is the IRC server password field. It is normally left blank for a Soju connection. Put the Soju password under Relay's Username + password (SASL PLAIN) authentication section.
 
 ## Migration strategy
+
+![Migration workflow: back up Relay, prepare Soju, stage disabled upstream networks, switch Relay and enable the networks, then verify automatic login and channels.](assets/diagrams/migration-workflow.svg)
 
 Use this order for each Relay account:
 

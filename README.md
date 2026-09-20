@@ -24,21 +24,7 @@ Read these in order:
 
 ## High-level architecture
 
-~~~text
-Relay browser/app
-        |
-        | HTTPS / WebSocket (optional web proxy or tunnel)
-        v
-Relay backend
-        |
-        | TLS + SASL PLAIN
-        v
-Soju IRC bouncer
-        |
-        | TLS + upstream authentication
-        v
-IRC networks
-~~~
+![Connection layout: browser to Relay backend over HTTPS/WebSocket; Relay to Soju over IRC/TLS using the Soju account; Soju to IRC networks using separate upstream authentication.](assets/diagrams/connection-layout.svg)
 
 Soju handles native IRC over TLS itself: no reverse proxy is required between Relay's backend and Soju. The connection hostname must resolve to the server, the TLS certificate must match it, and the listener port must be reachable. Soju's `hostname` setting does not create DNS records or open ports. An existing wildcard or private DNS record can provide resolution.
 
@@ -50,6 +36,8 @@ The important separation is:
 - Soju authenticates to each IRC network with upstream SASL credentials or its own registered client certificate.
 
 ## Migration principle
+
+![Migration workflow: back up Relay, prepare Soju, stage disabled upstream networks, switch Relay and enable the networks, then verify automatic login and channels.](assets/diagrams/migration-workflow.svg)
 
 Keep the existing Relay data and networks until the Soju connection is verified. Prepare Soju first, edit each Relay network in place, save once, then verify the upstream account and channels.
 

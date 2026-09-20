@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="1040" viewBox="0 0 640 1040" role="img" aria-labelledby="title desc">
+  <title id="title">Migration: prepare, switch, verify</title>
+  <desc id="desc">Back up Relay, prepare Soju DNS and TLS, stage disabled networks and their authentication, switch Relay to Soju and enable the networks, then verify automatic login with an upstream reconnect. Keep saved settings for rollback.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#60758c"/></marker>
+  </defs>
+  <style>
+    text { font-family: Arial, Helvetica, sans-serif; fill: #182d42; }
+    .title { font-size: 30px; font-weight: 700; }
+    .heading { font-size: 25px; font-weight: 700; }
+    .body { font-size: 22px; }
+    .label { font-size: 21px; fill: #405870; }
+    .arrow { fill: none; stroke: #60758c; stroke-width: 2; marker-end: url(#arrow); }
+  </style>
+  <rect width="640" height="1040" rx="20" fill="#f5f8fc"/>
+  <text x="32" y="52" class="title">Migration: prepare, switch, verify</text>
+  <text x="32" y="87" class="label">Move one network at a time. Keep a rollback path.</text>
+  <rect x="32" y="112" width="576" height="97" rx="12" fill="#ffffff" stroke="#c9d5e2"/>
+  <text x="56" y="149" class="heading">1  Back up Relay</text>
+  <text x="56" y="184" class="body">Save persistent data and direct IRC settings.</text>
+  <path class="arrow" d="M 320 214 V 248"/>
+  <rect x="32" y="259" width="576" height="126" rx="12" fill="#ffffff" stroke="#c9d5e2"/>
+  <text x="56" y="296" class="heading">2  Prepare Soju</text>
+  <text x="56" y="331" class="body">Check DNS, TLS, port access and service.</text>
+  <text x="56" y="360" class="body">Create a separate Soju user per account.</text>
+  <path class="arrow" d="M 320 390 V 424"/>
+  <rect x="32" y="435" width="576" height="126" rx="12" fill="#ffffff" stroke="#c9d5e2"/>
+  <text x="56" y="472" class="heading">3  Stage upstream networks</text>
+  <text x="56" y="507" class="body">Create disabled networks; configure SASL.</text>
+  <text x="56" y="536" class="body">For CertFP, generate a client certificate.</text>
+  <path class="arrow" d="M 320 566 V 600"/>
+  <rect x="32" y="611" width="576" height="126" rx="12" fill="#ffffff" stroke="#c9d5e2"/>
+  <text x="56" y="648" class="heading">4  Switch Relay, then enable</text>
+  <text x="56" y="683" class="body">Use Soju host + SASL account/password.</text>
+  <text x="56" y="712" class="body">Enable the staged upstream network.</text>
+  <path class="arrow" d="M 320 742 V 776"/>
+  <rect x="32" y="787" width="576" height="126" rx="12" fill="#e2f2ef" stroke="#7bb8ad"/>
+  <text x="56" y="824" class="heading">5  Verify before cleanup</text>
+  <text x="56" y="859" class="body">Register CertFP using network instructions.</text>
+  <text x="56" y="888" class="body">Reconnect upstream; verify login/channels.</text>
+  <text x="32" y="962" class="body">Browser reconnect ≠ upstream reconnect.</text>
+  <text x="32" y="997" class="label">Keep saved network settings until verified.</text>
+</svg>
