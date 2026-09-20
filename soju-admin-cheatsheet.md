@@ -1,6 +1,8 @@
 # Soju administration cheat sheet
 
-This assumes a Debian/Ubuntu installation using the packaged service and configuration file:
+These Soju administration commands are independent of your IRC client; [Relay](https://relayirc.com) is simply the web IRC client used in the companion guide.
+
+The service and filesystem examples assume Debian/Ubuntu with systemd and this configuration file. On other Linux distributions, adjust the package paths, service commands, and permissions to match your installation:
 
 ~~~text
 /etc/soju/config

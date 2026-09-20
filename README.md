@@ -1,8 +1,14 @@
 # Relay + Soju Runbook
 
-Operational documentation for running Relay with [Soju](https://soju.im/) as a persistent IRC bouncer.
+Operational documentation for running [Relay](https://relayirc.com), a web IRC client, with [Soju](https://soju.im/) as a persistent IRC bouncer.
 
 This runbook is intended for self-hosted deployments where Soju maintains the upstream IRC connections and Relay connects to Soju as an IRC client.
+
+## Use it with your client and distribution
+
+Relay is the example client because it is convenient for this setup, not because Soju requires it. The same approach applies to other compatible IRC clients: connect to Soju using its hostname, TLS port, and bouncer credentials. Field names and authentication options vary by client. A desktop or terminal IRC client normally connects directly to Soju, without Relay's browser/backend layers shown below.
+
+The setup is not limited to Debian/Ubuntu. The general approach applies across Linux distributions where Soju is available. The commands here use Debian/Ubuntu packages and systemd; adapt package names, paths, service management, firewall rules, and certificate-renewal scheduling for your distribution. Other distributions have not been tested by this runbook.
 
 ## What this covers
 

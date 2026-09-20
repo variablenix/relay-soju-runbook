@@ -1,6 +1,8 @@
 # Relay + Soju setup and migration guide
 
-This guide sets up Soju as a separate IRC bouncer and then moves Relay from direct IRC connections to Soju. It is written for a fresh Debian/Ubuntu environment and uses placeholders so it can be published as a general reference.
+This guide sets up Soju as a separate IRC bouncer and then moves [Relay](https://relayirc.com), the web IRC client used in these examples, from direct IRC connections to Soju. Relay is a convenience, not a requirement: other compatible IRC clients can use the same Soju connection and authentication model.
+
+The commands target a fresh Debian/Ubuntu installation using systemd. On other Linux distributions, adapt the packages, paths, service/firewall commands, and renewal scheduler. The general design is portable; these exact commands are not universal. All examples use placeholders.
 
 The workflow keeps the IRC connection at Soju. Relay becomes a client of Soju, so restarting or redeploying the Relay container does not normally make the upstream IRC network see a quit/part.
 
@@ -9,6 +11,8 @@ Jump to: [DNS and routing](#2-choose-the-network-path-and-dns) · [TLS certifica
 ## The final connection layout
 
 ![Connection layout: browser to Relay backend over HTTPS/WebSocket; Relay to Soju over IRC/TLS using the Soju account; Soju to IRC networks using separate upstream authentication.](assets/diagrams/connection-layout.svg)
+
+This diagram shows Relay's web-client architecture. With a desktop or terminal IRC client, replace the browser and Relay backend with your client connecting directly to Soju over IRC/TLS.
 
 Relay-to-Soju authentication and Soju-to-IRC authentication are separate:
 
@@ -489,6 +493,8 @@ The fingerprint displayed by certfp fingerprint is the client certificate finger
 Edit the existing Relay network instead of creating a second copy.
 
 ### Relay Network Connection settings
+
+For another IRC client, map these values to its server, TLS, and SASL settings. The account/password here authenticate to Soju, not to upstream NickServ. Clients without equivalent SASL controls may need the alternative login method documented in the [Soju manual](https://soju.im/doc/soju.1.html).
 
 Use these values:
 
