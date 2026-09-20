@@ -66,6 +66,6 @@ Prefer automatic network setup? Soju's [client notes](https://github.com/emersio
 
 The manual approach above remains usable without either script. Capability/history support depends on the installed client and scripts; do not assume every Soju extension is implemented.
 
-## Validation scope
+## Compatibility
 
-The client configuration commands were checked in an isolated WeeChat 4.10.1 profile with synthetic values and no network connection. A live TLS/SASL session against a deployed bouncer was not tested. No changes to Relay, Soju, or the Ansible repository are required by this document.
+These examples use WeeChat 4.x. If an option differs in your version, check WeeChat's built-in `/help` before applying it.
