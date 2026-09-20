@@ -81,6 +81,8 @@ sj-user <SOJU_USER> sasl status -network <NETWORK>
 
 ## Admin access
 
+For an optional menu-driven alternative to these commands, see [Soju-TUI](https://github.com/variablenix/soju-tui). It uses `sojuctl` and needs the same authorized admin-socket access; it is not an IRC chat client.
+
 Soju's admin socket grants full bouncer administration, including other users' networks. Use a trusted administrator account. Do not make the socket world-writable or copy a broad passwordless sudo rule just to avoid a prompt. If you deliberately delegate access, have the system administrator review the socket permissions or sudo policy; that is separate from connecting Relay as a regular Soju user.
 
 If Soju is running but the TUI or `sojuctl` reports permission denied, check access to both `/run/soju` and `/run/soju/admin`. Socket permissions may be recreated on restart. A missing socket instead calls for checking the service and `listen unix+admin://` configuration.

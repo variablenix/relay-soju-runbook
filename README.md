@@ -28,6 +28,12 @@ Read these in order:
 1. [Relay + Soju setup and migration guide](relay-soju-setup-and-migration.md) — complete installation and migration procedure.
 2. [Soju administration cheat sheet](soju-admin-cheatsheet.md) — day-to-day commands, helper functions, and troubleshooting.
 
+## Optional administration interface
+
+Prefer menus to command-line administration? [Soju-TUI](https://github.com/variablenix/soju-tui) is an optional terminal interface for managing Soju users, networks, channels, SASL, and certificates through `sojuctl`. It requires a running Soju instance and authorized access to its admin socket. Follow its README for installation and access setup.
+
+Soju-TUI is not an IRC chat client or a replacement for Soju, and it does not need to stay open to keep IRC connections alive. All administration in this runbook can still be performed with `sojuctl` without installing it.
+
 ## High-level architecture
 
 ![Connection layout: browser to Relay backend over HTTPS/WebSocket; Relay to Soju over IRC/TLS using the Soju account; Soju to IRC networks using separate upstream authentication.](assets/diagrams/connection-layout.svg)
